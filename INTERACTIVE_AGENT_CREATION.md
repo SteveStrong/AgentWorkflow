@@ -70,7 +70,36 @@ AI: "Great! Let me clarify a few details:
 
 ### Step 5: AI Generates Complete Solution
 ```
-AI: "Perfect! I'll create the FinancialDocumentAgentGroup with your specifications."
+AI: "Perfect! I'll create the FinancialDocumentAgentGroup with your specifications:
+
+class FinancialDocumentAgentGroup(TransformAgent):
+    output_ext = "json"
+
+    def __init__(self, step_num, scenario_id: str, runner: "WorkflowRunner"):
+        self.scenario_id = scenario_id
+        self.runner = runner
+        super().__init__(step_num, runner)
+
+    def process_tdp_content(self, tdp: "TDPDocument") -> Tuple[bool, "TDPDocument"]:
+        print("Starting Financial Document Agent Group")
+        
+        # Step 1: Parse PDF financial statements
+        step_1 = PDFFinancialParserAgent(1, self.runner)
+        success, step_1_content, step_1_doc = self.execute_step(step_1, None, tdp)
+        if not success: return success, step_1_doc
+
+        # Step 2: Extract key financial metrics
+        step_2 = FinancialMetricsExtractionAgent(2, self.runner)
+        success, step_2_content, step_2_doc = self.execute_step(step_2, step_1_content, tdp)
+        if not success: return success, step_2_doc
+
+        # Step 3: Validate the data
+        step_3 = FinancialDataValidationAgent(3, self.scenario_id, self.runner)
+        success, step_3_content, step_3_doc = self.execute_step(step_3, step_2_content, tdp)
+        if not success: return success, step_3_doc
+
+        return success, step_3_doc
+"
 ```
 
 ## Example Interactive Sessions
@@ -103,7 +132,40 @@ Any special parameters needed? Linear flow (each step uses previous output)?"
 
 User: "Yes, linear flow. No special parameters."
 
-AI: "Creating MedicalImageAgentGroup now..."
+AI: "Creating MedicalImageAgentGroup now:
+
+class MedicalImageAgentGroup(TransformAgent):
+    output_ext = "json"
+
+    def __init__(self, step_num, runner: "WorkflowRunner"):
+        self.runner = runner
+        super().__init__(step_num, runner)
+
+    def process_tdp_content(self, tdp: "TDPDocument") -> Tuple[bool, "TDPDocument"]:
+        print("Starting Medical Image Agent Group")
+        
+        # Step 1: Improve image quality
+        step_1 = ImageEnhancementAgent(1, self.runner)
+        success, step_1_content, step_1_doc = self.execute_step(step_1, None, tdp)
+        if not success: return success, step_1_doc
+
+        # Step 2: Detect potential issues  
+        step_2 = AnomalyDetectionAgent(2, self.runner)
+        success, step_2_content, step_2_doc = self.execute_step(step_2, step_1_content, tdp)
+        if not success: return success, step_2_doc
+
+        # Step 3: Classify detected findings
+        step_3 = FindingsClassificationAgent(3, self.runner)
+        success, step_3_content, step_3_doc = self.execute_step(step_3, step_2_content, tdp)
+        if not success: return success, step_3_doc
+
+        # Step 4: Generate final report
+        step_4 = MedicalReportGenerationAgent(4, self.runner)
+        success, step_4_content, step_4_doc = self.execute_step(step_4, step_3_content, tdp)
+        if not success: return success, step_4_doc
+
+        return success, step_4_doc
+"
 ```
 
 ### Session 2: Complex Routing Pipeline
@@ -136,9 +198,42 @@ User: "Compliance agent needs a regulatory_framework parameter"
 
 AI: "Perfect! Creating LegalContractAnalysisAgentGroup with:
 - Linear flow through clause extraction
-- Parallel processing for risk/compliance analysis
+- Parallel processing for risk/compliance analysis  
 - Special parameter for regulatory framework
-..."
+
+class LegalContractAnalysisAgentGroup(TransformAgent):
+    output_ext = "json"
+
+    def __init__(self, step_num, regulatory_framework: str, runner: "WorkflowRunner"):
+        self.regulatory_framework = regulatory_framework
+        self.runner = runner
+        super().__init__(step_num, runner)
+
+    def process_tdp_content(self, tdp: "TDPDocument") -> Tuple[bool, "TDPDocument"]:
+        print("Starting Legal Contract Analysis Agent Group")
+        
+        # Step 1: Parse contract text
+        step_1 = ContractParsingAgent(1, self.runner)
+        success, step_1_content, step_1_doc = self.execute_step(step_1, None, tdp)
+        if not success: return success, step_1_doc
+
+        # Step 2: Extract clauses  
+        step_2 = ClauseExtractionAgent(2, self.runner)
+        success, step_2_content, step_2_doc = self.execute_step(step_2, step_1_content, tdp)
+        if not success: return success, step_2_doc
+
+        # Step 3: Analyze risks (uses clause extraction output)
+        step_3 = RiskAnalysisAgent(3, self.runner)
+        success, step_3_content, step_3_doc = self.execute_step(step_3, step_2_content, tdp)
+        if not success: return success, step_3_doc
+
+        # Step 4: Check compliance (also uses clause extraction output)
+        step_4 = ComplianceCheckAgent(4, self.regulatory_framework, self.runner)
+        success, step_4_content, step_4_doc = self.execute_step(step_4, step_2_content, tdp)
+        if not success: return success, step_4_doc
+
+        return success, step_4_doc
+"
 ```
 
 ## Benefits of Interactive Approach
