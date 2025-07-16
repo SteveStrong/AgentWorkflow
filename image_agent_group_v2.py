@@ -22,43 +22,25 @@ class ImageChunkAgentGroupV2(TransformAgent):
 
         step_one = ImageDocumentAgent(1, self.runner)
         step_one.set_special_instructions(special_instructions)
-        step_one_doc = step_one.create_ai_document(tdp)
-        try:
-            step_one_content = step_one.process_tdp_content(
-                tdp.get_content(scenario_id)
-            )
-            self.runner.ai_doc_success(step_one_doc, step_one_content)
-        except Exception as e:
-            self.runner.ai_doc_failure(step_one_doc, message=str(e))
-            return False, tdp
+        success, step_one_content, step_one_doc = self.execute_step(step_one, None, tdp, "ImageDocumentAgent")
+        if not success:
+            return success, step_one_doc
         
         print("Starting chunk Agent", step_one_content)
         step_two = TextChunkAgent(2, self.runner)
-        step_two_doc = step_two.create_ai_document(step_one_doc)
-        try:
-            step_two_content = step_two.process_tdp_content(step_one_content)
-            self.runner.ai_doc_success(step_two_doc, step_two_content)
-        except Exception as e:
-            self.runner.ai_doc_failure(step_two_doc, message=str(e))
-            return False, step_one_doc
+        success, step_two_content, step_two_doc = self.execute_step(step_two, step_one_content, step_one_doc, "TextChunkAgent")
+        if not success:
+            return success, step_two_doc
 
         print("Starting Elasticsearch Agent", step_one_content)
         step_three = ElasticSearchAgent(3, scenario_id, self.runner)
-        step_three_doc = step_three.create_ai_document(step_two_doc)
-        try:
-            step_three_content = step_three.process_tdp_content(step_two_content)
-            self.runner.ai_doc_success(step_three_doc, step_three_content)
-        except Exception as e:
-            self.runner.ai_doc_failure(step_two_doc, message=str(e))
-            return False, step_one_doc
+        success, step_three_content, step_three_doc = self.execute_step(step_three, step_two_content, step_two_doc, "ElasticSearchAgent")
+        if not success:
+            return success, step_three_doc
 
         step_four = QdrantAgent(4, scenario_id, self.runner)
-        step_four_doc = step_four.create_ai_document(step_two_doc)
-        try:
-            step_four_content = step_four.process_tdp_content(step_two_content)
-            self.runner.ai_doc_success(step_four_doc, step_four_content)
-        except Exception as e:
-            self.runner.ai_doc_failure(step_four_doc, message=str(e))
-            return False, step_one_doc
+        success, step_four_content, step_four_doc = self.execute_step(step_four, step_two_content, step_two_doc, "QdrantAgent")
+        if not success:
+            return success, step_four_doc
 
         return True, step_four_content

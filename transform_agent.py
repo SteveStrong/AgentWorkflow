@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Set, TYPE_CHECKING
+from typing import List, Dict, Any, Set, TYPE_CHECKING, Tuple
 import re
 
 if TYPE_CHECKING:
@@ -66,6 +66,51 @@ class TransformAgent(ABC):
             SourceFileName=source_doc.FileName,
             SourceURL=source_doc.URL,
         )
+
+    def execute_step(
+        self,
+        agent: "TransformAgent",
+        input_content: bytes = None,
+        source_doc: "TDPDocument" = None,
+        step_name: str = None,
+    ) -> Tuple[bool, bytes, "AIDocument"]:
+        """
+        Execute a complete pipeline step with standardized error handling.
+        
+        Args:
+            agent: The agent to execute
+            input_content: The content to process (or None to get from source_doc)
+            source_doc: Document to create AI doc from (and get content from if input_content is None)
+            step_name: Optional name for logging
+        
+        Returns:
+            Tuple[bool, content, ai_doc] - (success, output_content, ai_document)
+        """
+        # Create AI document
+        ai_doc = agent.create_ai_document(source_doc)
+        
+        # Optional start logging
+        if step_name:
+            print(f"Starting {step_name}")
+        
+        try:
+            # Get content if not provided (for first step)
+            if input_content is None:
+                scenario_id = self.runner.get_scenario().Id
+                input_content = source_doc.get_content(scenario_id)
+                
+            # Execute the step
+            step_content = agent.process_tdp_content(input_content)
+            self.runner.ai_doc_success(ai_doc, step_content)
+            
+            # Optional completion logging
+            if step_name:
+                print(f"Finished {step_name}")
+                
+            return True, step_content, ai_doc
+        except Exception as e:
+            self.runner.ai_doc_failure(ai_doc, message=str(e))
+            return False, None, source_doc
 
     @abstractmethod
     def process_tdp_content(self, content: bytes) -> bytes:
