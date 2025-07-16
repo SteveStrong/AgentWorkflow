@@ -13,23 +13,16 @@ class ImageChunkAgentGroupV2(TransformAgent):
 
     def __init__(self, step_num, runner: WorkflowRunner):
         self.runner = runner
-        super().__init__(step_num)
+        super().__init__(step_num, runner)
 
     def process_tdp_content(self, tdp: TDPDocument) -> Tuple[bool, TDPDocument]:
         scenario_id = self.runner.get_scenario().Id
         special_instructions = tdp.SpecialInstructions
         print("Starting Section Image Chunk Agent Group")
 
-        step_one = ImageDocumentAgent(1)
+        step_one = ImageDocumentAgent(1, self.runner)
         step_one.set_special_instructions(special_instructions)
-        step_one_doc = AIDocument(
-            FileName=self.runner.compute_ai_doc_filename(
-                tdp.FileName, step_one.output_ext
-            ),
-            Description="",
-            SourceFileName=tdp.FileName,
-            SourceURL=tdp.URL,
-        )
+        step_one_doc = step_one.create_ai_document(tdp)
         try:
             step_one_content = step_one.process_tdp_content(
                 tdp.get_content(scenario_id)
@@ -40,15 +33,8 @@ class ImageChunkAgentGroupV2(TransformAgent):
             return False, tdp
         
         print("Starting chunk Agent", step_one_content)
-        step_two = TextChunkAgent(2)
-        step_two_doc = AIDocument(
-            FileName=self.runner.compute_ai_doc_filename(
-                step_one_doc.FileName, step_two.output_ext
-            ),
-            Description="",
-            SourceFileName=step_one_doc.FileName,
-            SourceURL=step_one_doc.URL,
-        )
+        step_two = TextChunkAgent(2, self.runner)
+        step_two_doc = step_two.create_ai_document(step_one_doc)
         try:
             step_two_content = step_two.process_tdp_content(step_one_content)
             self.runner.ai_doc_success(step_two_doc, step_two_content)
@@ -57,15 +43,8 @@ class ImageChunkAgentGroupV2(TransformAgent):
             return False, step_one_doc
 
         print("Starting Elasticsearch Agent", step_one_content)
-        step_three = ElasticSearchAgent(3, scenario_id)
-        step_three_doc = AIDocument(
-            FileName=self.runner.compute_ai_doc_filename(
-                step_two_doc.FileName, step_two.output_ext
-            ),
-            Description="",
-            SourceFileName=step_two_doc.FileName,
-            SourceURL=step_two_doc.URL,
-        )
+        step_three = ElasticSearchAgent(3, scenario_id, self.runner)
+        step_three_doc = step_three.create_ai_document(step_two_doc)
         try:
             step_three_content = step_three.process_tdp_content(step_two_content)
             self.runner.ai_doc_success(step_three_doc, step_three_content)
@@ -73,15 +52,8 @@ class ImageChunkAgentGroupV2(TransformAgent):
             self.runner.ai_doc_failure(step_two_doc, message=str(e))
             return False, step_one_doc
 
-        step_four = QdrantAgent(4, scenario_id)
-        step_four_doc = AIDocument(
-            FileName=self.runner.compute_ai_doc_filename(
-                step_two_doc.FileName, step_two.output_ext
-            ),
-            Description="",
-            SourceFileName=step_two_doc.FileName,
-            SourceURL=step_two_doc.URL,
-        )
+        step_four = QdrantAgent(4, scenario_id, self.runner)
+        step_four_doc = step_four.create_ai_document(step_two_doc)
         try:
             step_four_content = step_four.process_tdp_content(step_two_content)
             self.runner.ai_doc_success(step_four_doc, step_four_content)
