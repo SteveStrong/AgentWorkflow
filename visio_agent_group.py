@@ -23,23 +23,28 @@ class VisioAgentGroup(TransformAgent):
         print("Starting Visio Agent Group")
         
         # Step 1: Extract Visio diagram content
-        success, step_one_content, step_one_doc = self.execute_step(VisioAgent(1, self.runner), None, tdp, "VisioAgent")
-        if not success: return success, step_one_doc
+        step_1 = VisioAgent(1, self.runner)
+        success, step_1_content, step_1_doc = self.execute_step(step_1, None, tdp)
+        if not success: return success, step_1_doc
 
         # Step 2: Convert Visio JSON to SysML
-        success, step_two_content, step_two_doc = self.execute_step(VisioJSONtoSysMLAgent(2, self.runner), step_one_content, tdp, "VisioJSONtoSysMLAgent")
-        if not success: return success, step_two_doc
+        step_2 = VisioJSONtoSysMLAgent(2, self.runner)
+        success, step_2_content, step_2_doc = self.execute_step(step_2, step_1_content, tdp)
+        if not success: return success, step_2_doc
 
         # Step 3: Chunk SysML content
-        success, step_three_content, step_three_doc = self.execute_step(SysMLChunkAgent(3, self.runner), step_two_content, tdp, "SysMLChunkAgent")
-        if not success: return success, step_three_doc
+        step_3 = SysMLChunkAgent(3, self.runner)
+        success, step_3_content, step_3_doc = self.execute_step(step_3, step_2_content, tdp)
+        if not success: return success, step_3_doc
 
         # Step 4: Store in ElasticSearch
-        success, step_four_content, step_four_doc = self.execute_step(ElasticSearchAgent(4, self.scenario_id, self.runner), step_three_content, tdp, "ElasticSearchAgent")
-        if not success: return success, step_four_doc
+        step_4 = ElasticSearchAgent(4, self.scenario_id, self.runner)
+        success, step_4_content, step_4_doc = self.execute_step(step_4, step_3_content, tdp)
+        if not success: return success, step_4_doc
 
-        # Step 5: Store in Qdrant (using step_three_content like original)
-        success, step_five_content, step_five_doc = self.execute_step(QdrantAgent(5, self.scenario_id, self.runner), step_three_content, tdp, "QdrantAgent")
-        if not success: return success, step_five_doc
+        # Step 5: Store in Qdrant (using step_3_content like original)
+        step_5 = QdrantAgent(5, self.scenario_id, self.runner)
+        success, step_5_content, step_5_doc = self.execute_step(step_5, step_3_content, tdp)
+        if not success: return success, step_5_doc
 
-        return success, step_five_doc
+        return success, step_5_doc

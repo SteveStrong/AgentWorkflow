@@ -112,5 +112,5 @@ class TransformAgent(ABC):
             return False, None, source_doc
 
     @abstractmethod
-    def process_tdp_content(self, content: bytes) -> bytes:
+    def process_tdp_content(self, tdp: "TDPDocument") -> Tuple[bool, "TDPDocument"]:
         pass
