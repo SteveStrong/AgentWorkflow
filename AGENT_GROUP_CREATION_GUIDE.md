@@ -4,6 +4,129 @@
 
 This guide provides a standardized template and process for creating new agent groups that follow our established refactoring framework. Use this template when you need to create a new multi-step processing pipeline with proper error handling, logging, and consistency.
 
+## TransformAgent Base Class
+
+All agent groups inherit from `TransformAgent`, which provides the foundation for the framework. Here is the complete implementation that should be copied when recreating the framework:
+
+```python
+from abc import ABC, abstractmethod
+from typing import List, Dict, Any, Set, TYPE_CHECKING, Tuple
+import re
+
+if TYPE_CHECKING:
+    from src.scenario_models import AIDocument, TDPDocument
+    from src.agents.workflow_runner import WorkflowRunner
+
+
+class TransformAgent(ABC):
+    input_agents: List[str]
+    description: str = ""
+    output_ext: str
+
+    def __init__(self, step_num, runner: "WorkflowRunner" = None):
+        if not self.output_ext:
+            raise ValueError(
+                f"Output extension not provided for {self.__class__.__name__}"
+            )
+
+        self.step_num = step_num
+        self.runner = runner
+
+    def compute_filename(self, source_filename: str) -> str:
+        # Extract base name (without extension if present)
+        if "." in source_filename:
+            base_name, ext = source_filename.rsplit(".", 1)
+        else:
+            base_name = source_filename
+
+        # Check if base_name ends with _x (where x is a digit sequence)
+        match = re.search(r"_(\d+)$", base_name)
+        if match:
+            new_name = re.sub(r"_\d+$", f"_{self.step_num}", base_name)
+        else:
+            # Append _step_num to the base name
+            new_name = f"{base_name}_{self.step_num}"
+
+        return f"{new_name}.{self.output_ext}"
+
+    def create_ai_document(
+        self,
+        source_doc: "TDPDocument",
+        description: str = "",
+    ) -> "AIDocument":
+        """
+        Create an AIDocument instance from any TDPDocument (including AIDocument).
+        Since AIDocument inherits from TDPDocument, this works for both initial 
+        TDPDocuments and chained AIDocuments.
+
+        Args:
+            source_doc: The source document (TDPDocument or AIDocument)
+            description: Document description (optional)
+
+        Returns:
+            AIDocument instance
+        """
+        from src.scenario_models import AIDocument
+
+        return AIDocument(
+            FileName=self.runner.compute_ai_doc_filename(
+                source_doc.FileName, self.output_ext
+            ),
+            Description=description,
+            AgentName=self.__class__.__name__,
+            SourceFileName=source_doc.FileName,
+            SourceURL=source_doc.URL,
+        )
+
+    def execute_step(
+        self,
+        agent: "TransformAgent",
+        input_content: bytes = None,
+        source_doc: "TDPDocument" = None,
+    ) -> Tuple[bool, bytes, "AIDocument"]:
+        """
+        Execute a complete pipeline step with standardized error handling.
+        
+        Args:
+            agent: The agent to execute
+            input_content: The content to process (or None to get from source_doc)
+            source_doc: Document to create AI doc from (and get content from if input_content is None)
+        
+        Returns:
+            Tuple[bool, content, ai_doc] - (success, output_content, ai_document)
+        """
+        # Extract agent name from class
+        step_name = agent.__class__.__name__
+        
+        # Create AI document
+        ai_doc = agent.create_ai_document(source_doc)
+        
+        # Start logging
+        print(f"Starting {step_name}")
+        
+        try:
+            # Get content if not provided (for first step)
+            if input_content is None:
+                scenario_id = self.runner.get_scenario().Id
+                input_content = source_doc.get_content(scenario_id)
+                
+            # Execute the step
+            step_content = agent.process_tdp_content(input_content)
+            self.runner.ai_doc_success(ai_doc, step_content)
+            
+            # Completion logging
+            print(f"Finished {step_name}")
+                
+            return True, step_content, ai_doc
+        except Exception as e:
+            self.runner.ai_doc_failure(ai_doc, message=str(e))
+            return False, None, source_doc
+
+    @abstractmethod
+    def process_tdp_content(self, tdp: "TDPDocument") -> Tuple[bool, "TDPDocument"]:
+        pass
+```
+
 ## Quick Start Template
 
 When creating a new agent group, provide the following information:
@@ -71,22 +194,16 @@ class YourAgentGroup(TransformAgent):
         print("Starting Your Agent Group")
         
         # Step 1: First Agent
-        success, step_one_content, step_one_doc = self.execute_step(
-            YourAgent1(1, self.runner), 
-            None, 
-            tdp, 
-            "YourAgent1"
-        )
-        if not success: return success, step_one_doc
+        step_1 = YourAgent1(1, self.runner)
+        success, step_1_content, step_1_doc = self.execute_step(step_1, None, tdp)
+        if not success: return success, step_1_doc
 
         # Step 2: Second Agent
-        success, step_two_content, step_two_doc = self.execute_step(
-            YourAgent2(2, self.runner), 
-            step_one_content, 
-            tdp, 
-            "YourAgent2"
-        )
-        if not success: return success, step_two_doc
+        step_2 = YourAgent2(2, self.runner)
+        success, step_2_content, step_2_doc = self.execute_step(step_2, step_1_content, tdp)
+        if not success: return success, step_2_doc
+
+        return success, step_2_doc
 
         # ... additional steps following the same pattern
 
@@ -114,17 +231,19 @@ def process_tdp_content(self, tdp: "TDPDocument") -> Tuple[bool, "TDPDocument"]:
 ```
 
 ### Step Pattern
-Each step must follow this exact 3-line pattern:
+Each step must follow this exact pattern:
 ```python
 # Step N: Description
-success, content, doc = self.execute_step(Agent(N, self.runner), input_content, tdp, "AgentName")
-if not success: return success, doc
+step_N = AgentName(N, self.runner)  # or with scenario_id: AgentName(N, self.scenario_id, self.runner)
+success, step_N_content, step_N_doc = self.execute_step(step_N, input_content, tdp)
+if not success: return success, step_N_doc
 ```
 
 ### Error Handling
 - Each step automatically returns on failure with graceful fallback
 - No manual try/catch blocks needed
 - Built-in logging and AI document creation
+- Agent name is automatically extracted from the agent class
 
 ## Special Cases
 
@@ -212,16 +331,19 @@ Before considering your agent group complete, verify:
 ### Simple Linear Pipeline
 ```python
 # 3-step linear processing
-success, step_one_content, step_one_doc = self.execute_step(Agent1(1, self.runner), None, tdp, "Agent1")
-if not success: return success, step_one_doc
+step_1 = Agent1(1, self.runner)
+success, step_1_content, step_1_doc = self.execute_step(step_1, None, tdp)
+if not success: return success, step_1_doc
 
-success, step_two_content, step_two_doc = self.execute_step(Agent2(2, self.runner), step_one_content, tdp, "Agent2")
-if not success: return success, step_two_doc
+step_2 = Agent2(2, self.runner)
+success, step_2_content, step_2_doc = self.execute_step(step_2, step_1_content, tdp)
+if not success: return success, step_2_doc
 
-success, step_three_content, step_three_doc = self.execute_step(Agent3(3, self.runner), step_two_content, tdp, "Agent3")
-if not success: return success, step_three_doc
+step_3 = Agent3(3, self.runner)
+success, step_3_content, step_3_doc = self.execute_step(step_3, step_2_content, tdp)
+if not success: return success, step_3_doc
 
-return success, step_three_doc
+return success, step_3_doc
 ```
 
 ### Complex Routing Pipeline
