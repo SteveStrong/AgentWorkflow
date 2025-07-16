@@ -15,36 +15,37 @@ class SectionToRequirementSysmlAgentGroupV2(TransformAgent):
         super().__init__(step_num, runner)
 
     def process_tdp_content(self, tdp: TDPDocument) -> Tuple[bool, TDPDocument]:
-        print("Starting Section Chunk Agent Group")
+        scenario_id = self.runner.get_scenario().Id
+        print("Starting Section to Requirement SysML Agent Group V2")
         
-        step_one = SectionChunkAgent(1, self.runner)
-        success, step_one_content, step_one_doc = self.execute_step(step_one, None, tdp)
-        if not success:
-            return success, step_one_doc
+        # Step 1: Chunk sections
+        step_1 = SectionChunkAgent(1, self.runner)
+        success, step_1_content, step_1_doc = self.execute_step(step_1, None, tdp)
+        if not success: return success, step_1_doc
 
-        step_two = SectionToRequirementsAgent(2, self.runner)
-        success, step_two_content, step_two_doc = self.execute_step(step_two, step_one_content, step_one_doc)
-        if not success:
-            return success, step_two_doc
+        # Step 2: Convert sections to requirements
+        step_2 = SectionToRequirementsAgent(2, self.runner)
+        success, step_2_content, step_2_doc = self.execute_step(step_2, step_1_content, step_1_doc)
+        if not success: return success, step_2_doc
         
-        step_three = ElasticSearchAgent(3, self.runner.get_scenario().Id, self.runner)
-        success, step_three_content, step_three_doc = self.execute_step(step_three, step_two_content, step_two_doc)
-        if not success:
-            return success, step_three_doc
+        # Step 3: Store requirements in ElasticSearch
+        step_3 = ElasticSearchAgent(3, scenario_id, self.runner)
+        success, step_3_content, step_3_doc = self.execute_step(step_3, step_2_content, step_2_doc)
+        if not success: return success, step_3_doc
 
-        step_four = QdrantAgent(4, self.runner.get_scenario().Id, self.runner)
-        success, step_four_content, step_four_doc = self.execute_step(step_four, step_two_content, step_two_doc)
-        if not success:
-            return success, step_four_doc
+        # Step 4: Store requirements in Qdrant
+        step_4 = QdrantAgent(4, scenario_id, self.runner)
+        success, step_4_content, step_4_doc = self.execute_step(step_4, step_2_content, step_2_doc)
+        if not success: return success, step_4_doc
 
-        step_five = ElasticSearchAgent(5, self.runner.get_scenario().Id, self.runner)
-        success, step_five_content, step_five_doc = self.execute_step(step_five, step_one_content, step_four_doc)
-        if not success:
-            return success, step_five_doc
+        # Step 5: Store sections in ElasticSearch
+        step_5 = ElasticSearchAgent(5, scenario_id, self.runner)
+        success, step_5_content, step_5_doc = self.execute_step(step_5, step_1_content, step_4_doc)
+        if not success: return success, step_5_doc
 
-        step_six = QdrantAgent(6, self.runner.get_scenario().Id, self.runner)
-        success, step_six_content, step_six_doc = self.execute_step(step_six, step_one_content, step_five_doc)
-        if not success:
-            return success, step_six_doc
+        # Step 6: Store sections in Qdrant
+        step_6 = QdrantAgent(6, scenario_id, self.runner)
+        success, step_6_content, step_6_doc = self.execute_step(step_6, step_1_content, step_5_doc)
+        if not success: return success, step_6_doc
 
-        return True, step_six_content
+        return success, step_6_doc

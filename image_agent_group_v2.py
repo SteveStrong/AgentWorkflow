@@ -18,29 +18,27 @@ class ImageChunkAgentGroupV2(TransformAgent):
     def process_tdp_content(self, tdp: TDPDocument) -> Tuple[bool, TDPDocument]:
         scenario_id = self.runner.get_scenario().Id
         special_instructions = tdp.SpecialInstructions
-        print("Starting Section Image Chunk Agent Group")
+        print("Starting Image Chunk Agent Group V2")
 
-        step_one = ImageDocumentAgent(1, self.runner)
-        step_one.set_special_instructions(special_instructions)
-        success, step_one_content, step_one_doc = self.execute_step(step_one, None, tdp, "ImageDocumentAgent")
-        if not success:
-            return success, step_one_doc
+        # Step 1: Process image document
+        step_1 = ImageDocumentAgent(1, self.runner)
+        step_1.set_special_instructions(special_instructions)
+        success, step_1_content, step_1_doc = self.execute_step(step_1, None, tdp)
+        if not success: return success, step_1_doc
         
-        print("Starting chunk Agent", step_one_content)
-        step_two = TextChunkAgent(2, self.runner)
-        success, step_two_content, step_two_doc = self.execute_step(step_two, step_one_content, step_one_doc, "TextChunkAgent")
-        if not success:
-            return success, step_two_doc
+        # Step 2: Chunk text content
+        step_2 = TextChunkAgent(2, self.runner)
+        success, step_2_content, step_2_doc = self.execute_step(step_2, step_1_content, step_1_doc)
+        if not success: return success, step_2_doc
 
-        print("Starting Elasticsearch Agent", step_one_content)
-        step_three = ElasticSearchAgent(3, scenario_id, self.runner)
-        success, step_three_content, step_three_doc = self.execute_step(step_three, step_two_content, step_two_doc, "ElasticSearchAgent")
-        if not success:
-            return success, step_three_doc
+        # Step 3: Store in ElasticSearch
+        step_3 = ElasticSearchAgent(3, scenario_id, self.runner)
+        success, step_3_content, step_3_doc = self.execute_step(step_3, step_2_content, step_2_doc)
+        if not success: return success, step_3_doc
 
-        step_four = QdrantAgent(4, scenario_id, self.runner)
-        success, step_four_content, step_four_doc = self.execute_step(step_four, step_two_content, step_two_doc, "QdrantAgent")
-        if not success:
-            return success, step_four_doc
+        # Step 4: Store in Qdrant
+        step_4 = QdrantAgent(4, scenario_id, self.runner)
+        success, step_4_content, step_4_doc = self.execute_step(step_4, step_2_content, step_2_doc)
+        if not success: return success, step_4_doc
 
-        return True, step_four_content
+        return success, step_4_doc
